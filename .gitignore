@@ -1,0 +1,6 @@
+venv/
+temp_pages/
+output/
+.env
+__pycache__/
+*.pyc
