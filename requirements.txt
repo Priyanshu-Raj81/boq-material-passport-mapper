@@ -1,6 +1,21 @@
-pymupdf>=1.24.0
-pandas>=2.0.0
-openpyxl>=3.1.0
-openai>=1.12.0
-python-dotenv>=1.0.0
+# OpenAI API & AI Models
+openai>=1.0.0
+
+# PDF & Image Processing
+pymupdf>=1.23.0
+Pillow>=10.0.0
+
+# Data Validation & Schema Parsing
 pydantic>=2.0.0
+
+# Data Processing & Analysis
+pandas>=2.0.0
+
+# Excel File Handling
+openpyxl>=3.1.0
+
+# Data Visualization & Chart Generation
+matplotlib>=3.7.0
+
+# Environment Variable Management
+python-dotenv>=1.0.0
