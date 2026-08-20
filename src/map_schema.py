@@ -1,73 +1,82 @@
 import os
 import json
-import glob
 import openpyxl
-from dotenv import load_dotenv
 
-load_dotenv()
+def normalize_unit(unit_str):
+    if not unit_str:
+        return ""
+    u = unit_str.strip().lower()
+    if u in ["cu.m", "cum", "m3", "m³", "cubic metre"]:
+        return "cum"
+    if u in ["sq.m", "sqm", "m2", "m²", "square metre"]:
+        return "sqm"
+    if u in ["r.m", "rm", "m", "metre"]:
+        return "m"
+    if u in ["kg", "kgs", "kilogram"]:
+        return "kg"
+    return unit_str
 
 def map_data_to_excel_template():
     output_dir = os.getenv("OUTPUT_DIR", "output")
     json_path = os.path.join(output_dir, "raw_extracted.json")
-    excel_template = os.getenv("EXCEL_TEMPLATE_PATH", "AMP_Passport_Template_2.xlsx")
+    template_path = os.getenv("EXCEL_TEMPLATE_PATH", "AMP_Passport_Template.xlsx")
     final_excel_path = os.path.join(output_dir, "passport_filled.xlsx")
 
     if not os.path.exists(json_path):
-        raise FileNotFoundError(f"Extraction file missing at: {json_path}")
-
-    if not os.path.exists(excel_template):
-        xlsx_files = [f for f in glob.glob("*.xlsx") if not f.startswith("~$") and f != "passport_filled.xlsx"]
-        if xlsx_files:
-            excel_template = xlsx_files[0]
-        else:
-            raise FileNotFoundError("No Excel template (.xlsx) found!")
-
-    wb = openpyxl.load_workbook(excel_template)
-    ws = wb.active
+        print(f"[!] Error: {json_path} not found.")
+        return
 
     with open(json_path, "r", encoding="utf-8") as f:
-        raw_data = json.load(f)
+        items = json.load(f)
 
-    # Clean dummy example rows (Rows 4 and 5)
-    for r in range(4, 6):
-        for c in range(1, 51):
+    wb = openpyxl.load_workbook(template_path)
+    ws = wb["Material Passport"]
+
+    # Clear example rows starting from Row 4
+    for r in range(4, ws.max_row + 1):
+        for c in range(1, ws.max_column + 1):
             ws.cell(row=r, column=c).value = None
 
-    start_row = 4
+    row_idx = 4
+    for item in items:
+        # Col 2: BOQ Item No.
+        ws.cell(row=row_idx, column=2, value=item.get("item_no"))
+        # Col 5: Description
+        ws.cell(row=row_idx, column=5, value=item.get("description"))
+        # Col 6: Floor / Section
+        ws.cell(row=row_idx, column=6, value=item.get("floor_section"))
+        # Col 7: Discipline
+        ws.cell(row=row_idx, column=7, value=item.get("discipline") or "Civil")
+        # Col 8: Material / Product
+        ws.cell(row=row_idx, column=8, value=item.get("material_product"))
+        # Col 10: Material Category
+        ws.cell(row=row_idx, column=10, value=item.get("material_category"))
+        # Col 12: Grade
+        ws.cell(row=row_idx, column=12, value=item.get("grade_mix"))
+        # Col 14: Original Quantity
+        ws.cell(row=row_idx, column=14, value=item.get("quantity"))
+        # Col 15: Original Unit
+        ws.cell(row=row_idx, column=15, value=normalize_unit(item.get("unit")))
+        # Col 27: Schedule (DSR/SOR)
+        ws.cell(row=row_idx, column=27, value="DSR" if item.get("dsr_code") else None)
+        # Col 28: Schedule Item Code (FIXED MAPPING)
+        ws.cell(row=row_idx, column=28, value=item.get("dsr_code"))
+        # Col 47: Unit Rate
+        ws.cell(row=row_idx, column=47, value=item.get("rate"))
+        # Col 48: Total Cost
+        ws.cell(row=row_idx, column=48, value=item.get("amount"))
+        # Col 49: Currency
+        ws.cell(row=row_idx, column=49, value="INR")
 
-    for page in raw_data:
-        for item in page.get("items", []):
-            item_no = item.get("item_no", "")
-            description = item.get("description", "")
-            dsr_code = item.get("dsr_code", "")
-            quantity = item.get("quantity", None)
-            unit = item.get("unit", "")
-            rate = item.get("rate", None)
-            amount = item.get("amount", None)
+        row_idx += 1
 
-            # Mapping to AMP Material Passport Template Schema
-            ws.cell(row=start_row, column=2, value=item_no)        # Col B: BOQ Item No.
-            ws.cell(row=start_row, column=4, value=dsr_code)       # Col D: External DB Id / DSR Code
-            ws.cell(row=start_row, column=5, value=description)    # Col E: Description
-            
-            if quantity is not None:
-                ws.cell(row=start_row, column=14, value=quantity)  # Col N: Original Quantity
-            
-            if unit:
-                ws.cell(row=start_row, column=15, value=unit)      # Col O: Original Unit
-                
-            if rate is not None:
-                ws.cell(row=start_row, column=47, value=rate)      # Col AU: Unit Rate
-                
-            if amount is not None:
-                ws.cell(row=start_row, column=48, value=amount)    # Col AV: Total Cost
-                
-            ws.cell(row=start_row, column=49, value="INR")          # Col AW: Currency
-
-            start_row += 1
-
-    wb.save(final_excel_path)
-    print(f"[✓] Successfully populated full schema into '{final_excel_path}'")
+    try:
+        wb.save(final_excel_path)
+        print(f"[✓] Successfully populated {len(items)} items into '{final_excel_path}'")
+    except PermissionError:
+        fallback = os.path.join(output_dir, "passport_filled_updated.xlsx")
+        wb.save(fallback)
+        print(f"[!] Primary file was open. Saved to fallback: '{fallback}'")
 
 if __name__ == "__main__":
     map_data_to_excel_template()
